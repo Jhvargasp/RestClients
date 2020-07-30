@@ -27,13 +27,14 @@ public class ClientController {
         return "Hello World!";
     }
 
-    @GetMapping (value = "/restTemplate")
-    public BookResponse getBooks(){
+
+    @GetMapping (value = "/webClient")
+    public BookResponse getBooks2(){
         AtomicReference<BookResponse> lastResponse=new AtomicReference<>();
-        RestTemplate restTemplate = new RestTemplateBuilder().build();
         IntStream.range(1, 10).forEach(
                 num -> {
-                    BookResponse bookResponse = restTemplate.getForObject(URL_ENDPOINT + new Random().nextInt(100), BookResponse.class);
+                    WebClient client2 = WebClient.create(URL_ENDPOINT + new Random().nextInt(100));
+                    BookResponse bookResponse= client2.get().retrieve().bodyToMono(BookResponse.class).block();
                     lastResponse.set(bookResponse);
                     log.debug("Got {} books", bookResponse.getTotalItems());
 
@@ -43,7 +44,6 @@ public class ClientController {
         );
         return lastResponse.get();
     }
-
 
 
 

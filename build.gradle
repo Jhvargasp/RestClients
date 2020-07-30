@@ -26,8 +26,6 @@ dependencies {
 	testCompileOnly 'org.projectlombok:lombok:1.18.12'
 	testAnnotationProcessor 'org.projectlombok:lombok:1.18.12'
 
-	//
-	compile group: 'org.springframework.cloud', name: 'spring-cloud-starter-openfeign', version: '2.2.3.RELEASE'
 
 
 }

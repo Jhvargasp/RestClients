@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -21,7 +22,6 @@ import java.net.URL;
 import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.IntStream;
 
 @RestController
 @RequestMapping("client")
@@ -31,31 +31,27 @@ public class ClientController {
     public static final String URL_ENDPOINT = "https://www.googleapis.com/books/v1/volumes?q=";
 
 
-    @GetMapping (value = "/hello")
-    public String helloWorld(){
+    @GetMapping(value = "/hello")
+    public String helloWorld() {
         return "Hello World!";
     }
 
-    @GetMapping (value = "/stream")
-    public BookResponse stream()  {
+    @GetMapping(value = "/stream")
+    public BookResponse stream() {
         Gson g = new GsonBuilder().setLenient().create();
 
-        AtomicReference<BookResponse> bookResponse=new AtomicReference<>();
-        StringBuffer response=new StringBuffer();
-        IntStream.range(1, 10).forEach(
-                num -> {
-                    try {
-                        callUsingSream(g, bookResponse, response);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-        );
+        AtomicReference<BookResponse> bookResponse = new AtomicReference<>();
+        StringBuffer response = new StringBuffer();
+        try {
+            callUsingSream(g, bookResponse, response);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         return bookResponse.get();
     }
 
     private void callUsingSream(Gson g, AtomicReference<BookResponse> bookResponse, StringBuffer response) throws IOException {
-        URL urlForGetRequest = new URL(URL_ENDPOINT+ new Random().nextInt(100));
+        URL urlForGetRequest = new URL(URL_ENDPOINT + new Random().nextInt(100));
 
         String readLine = null;
 
@@ -74,20 +70,20 @@ public class ClientController {
                     new InputStreamReader(conection.getInputStream()));
 
 
-
-            while ((readLine = in .readLine()) != null) {
+            while ((readLine = in.readLine()) != null) {
 
                 response.append(readLine);
 
-            } in .close();
+            }
+            in.close();
 
             // print result
 
             log.debug("JSON String Result " + response.toString());
             try {
                 bookResponse.set(g.fromJson(response.toString(), BookResponse.class));
-            }catch (RuntimeException ex){
-                log.error("Problem translating data.. GSON.. {}",ex.getMessage());
+            } catch (RuntimeException ex) {
+                log.error("Problem translating data.. GSON.. {}", ex.getMessage());
             }
 
         } else {
@@ -98,57 +94,38 @@ public class ClientController {
     }
 
 
-    @GetMapping (value = "/restTemplate")
-    public BookResponse getBooks(){
-        AtomicReference<BookResponse> lastResponse=new AtomicReference<>();
+    @GetMapping(value = "/restTemplate")
+    public BookResponse getBooks() {
         RestTemplate restTemplate = new RestTemplateBuilder().build();
-        IntStream.range(1, 10).forEach(
-                num -> {
-                    BookResponse bookResponse = restTemplate.getForObject(URL_ENDPOINT + new Random().nextInt(100), BookResponse.class);
-                    lastResponse.set(bookResponse);
-                    log.debug("Got {} books", bookResponse.getTotalItems());
+        BookResponse bookResponse = restTemplate.getForObject(URL_ENDPOINT + new Random().nextInt(100), BookResponse.class);
+        log.debug("Got {} books", bookResponse.getTotalItems());
 
-                    Arrays.stream(bookResponse.getItems())//.filter(x -> Float.parseFloat(Optional.ofNullable(x.getVolumeInfo().getAverageRating()).orElse("0.0")) >= 2.0f)
-                            .forEach(x -> log.debug("Name  {}, rating {} ", x.getVolumeInfo().getTitle(), x.getVolumeInfo().getAverageRating()));
-                }
-        );
-        return lastResponse.get();
+        Arrays.stream(bookResponse.getItems())//.filter(x -> Float.parseFloat(Optional.ofNullable(x.getVolumeInfo().getAverageRating()).orElse("0.0")) >= 2.0f)
+                .forEach(x -> log.debug("Name  {}, rating {} ", x.getVolumeInfo().getTitle(), x.getVolumeInfo().getAverageRating()));
+        return bookResponse;
     }
 
-    @GetMapping (value = "/webClient")
-    public BookResponse getBooks2(){
-        AtomicReference<BookResponse> lastResponse=new AtomicReference<>();
-        IntStream.range(1, 10).forEach(
-                num -> {
-                    WebClient client2 = WebClient.create(URL_ENDPOINT + new Random().nextInt(100));
-                    BookResponse bookResponse= client2.get().retrieve().bodyToMono(BookResponse.class).block();
-                    lastResponse.set(bookResponse);
-                    log.debug("Got {} books", bookResponse.getTotalItems());
-
-                    Arrays.stream(bookResponse.getItems())//.filter(x -> Float.parseFloat(Optional.ofNullable(x.getVolumeInfo().getAverageRating()).orElse("0.0")) >= 2.0f)
-                            .forEach(x -> log.debug("Name  {}, rating {} ", x.getVolumeInfo().getTitle(), x.getVolumeInfo().getAverageRating()));
-                }
+    @GetMapping(value = "/webClient")
+    public Mono<BookResponse> getBooks2() {
+        WebClient client2 = WebClient.create(URL_ENDPOINT + new Random().nextInt(100));
+        Mono<BookResponse> monoBookResponse = client2.get().retrieve().bodyToMono(BookResponse.class);
+        monoBookResponse.subscribe(
+                x -> Arrays.stream(x.getItems()).forEach(y -> log.debug("Name  {}, rating {} ", y.getVolumeInfo().getTitle(), y.getVolumeInfo().getAverageRating()))
         );
-        return lastResponse.get();
+        return monoBookResponse;
     }
 
     @Autowired
     BookClientFeign feignClient;
 
-    @GetMapping (value = "/feign")
-    public BookResponse getBooks3(){
-        AtomicReference<BookResponse> lastResponse=new AtomicReference<>();
-        IntStream.range(1, 10).forEach(
-                num -> {
-                    BookResponse bookResponse= feignClient.getBooks(new Random().nextInt(100));
-                    lastResponse.set(bookResponse);
-                    log.debug("Got {} books", bookResponse.getTotalItems());
+    @GetMapping(value = "/feign")
+    public BookResponse getBooks3() {
+        BookResponse bookResponse = feignClient.getBooks(new Random().nextInt(100));
+        log.debug("Got {} books", bookResponse.getTotalItems());
 
-                    Arrays.stream(bookResponse.getItems())//.filter(x -> Float.parseFloat(Optional.ofNullable(x.getVolumeInfo().getAverageRating()).orElse("0.0")) >= 2.0f)
-                            .forEach(x -> log.debug("Name  {}, rating {} ", x.getVolumeInfo().getTitle(), x.getVolumeInfo().getAverageRating()));
-                }
-        );
-        return lastResponse.get();
+        Arrays.stream(bookResponse.getItems())//.filter(x -> Float.parseFloat(Optional.ofNullable(x.getVolumeInfo().getAverageRating()).orElse("0.0")) >= 2.0f)
+                .forEach(x -> log.debug("Name  {}, rating {} ", x.getVolumeInfo().getTitle(), x.getVolumeInfo().getAverageRating()));
+        return bookResponse;
     }
 
 }
